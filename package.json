@@ -8,6 +8,6 @@
     "start": "cd ananda-backend && node server.js"
   },
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   }
 }
