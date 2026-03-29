@@ -1,0 +1,13 @@
+{
+  "name": "spiritual-saathi",
+  "version": "1.0.0",
+  "description": "A spiritual wellness application for seniors",
+  "main": "server.js",
+  "scripts": {
+    "build": "cd ananda-app && npm install && npm run build && cd ../ananda-backend && npm install",
+    "start": "cd ananda-backend && node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

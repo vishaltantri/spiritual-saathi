@@ -1,0 +1,14 @@
+node_modules/
+dist/
+ananda-app/dist/
+
+# Env Files
+.env
+
+# DBs
+*.db
+*.sqlite
+ananda-backend/ananda.db
+
+# OS Files
+.DS_Store
