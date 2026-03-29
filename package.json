@@ -4,7 +4,7 @@
   "description": "A spiritual wellness application for seniors",
   "main": "server.js",
   "scripts": {
-    "build": "cd ananda-app && npm install && npm run build && cd ../ananda-backend && npm install",
+    "build": "cd ananda-app && npm install --include=dev && npm run build && cd ../ananda-backend && npm install",
     "start": "cd ananda-backend && node server.js"
   },
   "engines": {
