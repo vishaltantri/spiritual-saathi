@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const { Groq } = require('groq-sdk');
 const path = require('path');
 
@@ -14,15 +14,12 @@ app.use(express.json());
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../ananda-app/dist')));
 
-
 // Initialize SQLite database
-const db = new sqlite3.Database('./ananda.db', (err) => {
-  if (err) console.error(err.message);
-  else console.log('Connected to the SQLite database.');
-});
+const db = new Database('./ananda.db');
+console.log('Connected to the SQLite database.');
 
 // Create messages table if it doesn't exist
-db.run(`CREATE TABLE IF NOT EXISTS messages (
+db.exec(`CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   text TEXT NOT NULL,
@@ -31,27 +28,29 @@ db.run(`CREATE TABLE IF NOT EXISTS messages (
 )`);
 
 // Ensure some seed data exists if the table is empty
-db.get("SELECT COUNT(*) as count FROM messages", (err, row) => {
-  if (row && row.count === 0) {
-    const seed = [
-      { name: "Radha Ma", time: "09:00 AM", text: "Jai Shri Krishna! I am starting my 21-day reading of the Ramayan today." },
-      { name: "Dev", time: "09:15 AM", text: "Such a beautiful morning! Has anyone watched the new emotional health video?" },
-      { name: "Anand Ji", time: "09:30 AM", text: "Yes Dev, it was very comforting. Har Har Mahadev to all 🙏" }
-    ];
-    const stmt = db.prepare("INSERT INTO messages (name, text, time) VALUES (?, ?, ?)");
-    seed.forEach(m => stmt.run(m.name, m.text, m.time));
-    stmt.finalize();
+const countRow = db.prepare("SELECT COUNT(*) as count FROM messages").get();
+if (countRow && countRow.count === 0) {
+  const seed = [
+    { name: "Radha Ma", time: "09:00 AM", text: "Jai Shri Krishna! I am starting my 21-day reading of the Ramayan today." },
+    { name: "Dev", time: "09:15 AM", text: "Such a beautiful morning! Has anyone watched the new emotional health video?" },
+    { name: "Anand Ji", time: "09:30 AM", text: "Yes Dev, it was very comforting. Har Har Mahadev to all 🙏" }
+  ];
+  const stmt = db.prepare("INSERT INTO messages (name, text, time) VALUES (?, ?, ?)");
+  for (const m of seed) {
+    stmt.run(m.name, m.text, m.time);
   }
-});
+}
 
 // ─── COMMUNITY CHAT ENDPOINTS ───
 
 // Get all messages
 app.get('/api/messages', (req, res) => {
-  db.all("SELECT id, name, text, time FROM messages ORDER BY id ASC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const rows = db.prepare("SELECT id, name, text, time FROM messages ORDER BY id ASC").all();
     res.json(rows);
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Post a new message
@@ -62,10 +61,12 @@ app.post('/api/messages', (req, res) => {
   const safeName = name || "You";
   const safeTime = time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  db.run(`INSERT INTO messages (name, text, time) VALUES (?, ?, ?)`, [safeName, text, safeTime], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ id: this.lastID, name: safeName, text, time: safeTime });
-  });
+  try {
+    const info = db.prepare("INSERT INTO messages (name, text, time) VALUES (?, ?, ?)").run(safeName, text, safeTime);
+    res.json({ id: info.lastInsertRowid, name: safeName, text, time: safeTime });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── AI CHAT ENDPOINT ───
@@ -126,5 +127,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Ananda Backend listening on port ${port}`);
+  console.log(`Spiritual Saathi Backend listening on port ${port}`);
 });
