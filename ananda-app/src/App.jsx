@@ -295,6 +295,25 @@ body { font-family:'Nunito',sans-serif; background:var(--bg); color:var(--text);
 .ai-bubble.user { background:var(--saffron); color:white; align-self:flex-end; max-width:80%; }
 .ai-bubble.bot { background:white; border:1.5px solid var(--border); color:var(--text); align-self:flex-start; max-width:90%; }
 .ai-bubble.bot.loading { color:var(--gray); font-style:italic; }
+.ai-bubble .speak-btn { background:none; border:none; cursor:pointer; font-size:18px; padding:4px 6px; border-radius:8px; transition:all .2s; opacity:0.6; }
+.ai-bubble .speak-btn:hover { opacity:1; background:rgba(232,98,26,0.1); }
+.ai-bubble .speak-btn.speaking { opacity:1; animation: pulse-speak 1.2s infinite; }
+@keyframes pulse-speak { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+.auto-speak-toggle { display:flex; align-items:center; gap:10px; padding:8px 14px; border-radius:12px; background:rgba(232,98,26,0.06); border:1.5px solid transparent; transition:all .3s; cursor:pointer; user-select:none; }
+.auto-speak-toggle:hover { border-color:var(--saffron); }
+.auto-speak-toggle.active { background:rgba(232,98,26,0.12); border-color:var(--saffron); }
+.auto-speak-switch { width:40px; height:22px; border-radius:11px; background:#ccc; position:relative; transition:background .3s; flex-shrink:0; }
+.auto-speak-switch.on { background:var(--saffron); }
+.auto-speak-switch::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:white; transition:transform .3s; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+.auto-speak-switch.on::after { transform:translateX(18px); }
+.speaking-indicator { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--saffron); font-weight:600; }
+.speaking-indicator .bars { display:flex; gap:2px; align-items:flex-end; height:14px; }
+.speaking-indicator .bar { width:3px; background:var(--saffron); border-radius:2px; animation:sound-bar 0.8s infinite ease-in-out; }
+.speaking-indicator .bar:nth-child(1) { animation-delay:0s; height:6px; }
+.speaking-indicator .bar:nth-child(2) { animation-delay:0.15s; height:10px; }
+.speaking-indicator .bar:nth-child(3) { animation-delay:0.3s; height:4px; }
+.speaking-indicator .bar:nth-child(4) { animation-delay:0.45s; height:12px; }
+@keyframes sound-bar { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.8)} }
 
 /* ── PRAYER ── */
 .prayer-block {
@@ -893,6 +912,9 @@ export default function App() {
   const [therapyCat, setTherapyCat] = useState("All");
   const [isListening, setIsListening] = useState(false);
   const [isChatListening, setIsChatListening] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speakingMsgIdx, setSpeakingMsgIdx] = useState(null);
   const aiEndRef = useRef(null);
 
   // content pages that require a religion to be selected first
@@ -944,11 +966,34 @@ export default function App() {
     aiEndRef.current?.scrollIntoView({ behavior:"smooth" });
   }, [aiMsgs]);
 
+  const stripEmojis = (str) => {
+    if (!str) return '';
+    return str.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
+  };
+
   const readAloud = (text) => {
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "hi-IN"; u.rate = 0.82;
+    setIsSpeaking(false);
+    setSpeakingMsgIdx(null);
+    const u = new SpeechSynthesisUtterance(stripEmojis(text));
+    u.lang = "en-IN"; u.rate = 0.85;
     window.speechSynthesis.speak(u);
+  };
+
+  const speakAiReply = (text, msgIndex) => {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(stripEmojis(text));
+    u.lang = "en-IN"; u.rate = 0.85;
+    u.onstart = () => { setIsSpeaking(true); setSpeakingMsgIdx(msgIndex); };
+    u.onend = () => { setIsSpeaking(false); setSpeakingMsgIdx(null); };
+    u.onerror = () => { setIsSpeaking(false); setSpeakingMsgIdx(null); };
+    window.speechSynthesis.speak(u);
+  };
+
+  const stopSpeaking = () => {
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+    setSpeakingMsgIdx(null);
   };
 
   const askAI = async () => {
@@ -970,7 +1015,14 @@ export default function App() {
         })
       });
       const data = await res.json();
-      setAiMsgs(m => [...m.slice(0,-1), { role:"bot", text: data.reply || "Error fetching AI response" }]);
+      const replyText = data.reply || "Error fetching AI response";
+      setAiMsgs(m => {
+        const newMsgs = [...m.slice(0,-1), { role:"bot", text: replyText }];
+        if (autoSpeak) {
+          setTimeout(() => speakAiReply(replyText, newMsgs.length - 1), 100);
+        }
+        return newMsgs;
+      });
     } catch {
       setAiMsgs(m => [...m.slice(0,-1), { role:"bot", text:"⚠️ Could not connect to AI. Please check the backend." }]);
     } finally {
@@ -1262,18 +1314,44 @@ export default function App() {
         <div className="divider"/>
 
         <div className="card" style={{marginBottom:16,background:"linear-gradient(135deg,#FFF8F0,#FFF3E0)"}}>
-          <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:16}}>
+          <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
             <span style={{fontSize:32}}>🤖</span>
-            <div>
+            <div style={{flex:1,minWidth:140}}>
               <div style={{fontFamily:"'Yatra One',serif",fontSize:18,color:"var(--deep)"}}>{relData.aiName}</div>
               <div style={{fontSize:12,color:"var(--gray)"}}>Spiritual & Emotional Support</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {isSpeaking && (
+                <div className="speaking-indicator">
+                  <div className="bars"><div className="bar"/><div className="bar"/><div className="bar"/><div className="bar"/></div>
+                  Speaking…
+                  <button onClick={stopSpeaking} style={{background:"#E53935",border:"none",borderRadius:8,color:"white",padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>⏹ Stop</button>
+                </div>
+              )}
+              <div className={`auto-speak-toggle ${autoSpeak?'active':''}`} onClick={()=>setAutoSpeak(a=>!a)}>
+                <div className={`auto-speak-switch ${autoSpeak?'on':''}`}/>
+                <span style={{fontSize:13,fontWeight:600,color:autoSpeak?'var(--saffron)':'var(--gray)',whiteSpace:'nowrap'}}>🔊 Auto Voice</span>
+              </div>
             </div>
           </div>
 
           <div className="ai-msgs">
             {aiMsgs.map((m,i)=>(
               <div key={i} className={`ai-bubble ${m.role} ${m.loading?"loading":""}`}>
-                {m.role==="bot" && <span style={{fontWeight:700,display:"block",marginBottom:4,fontSize:12,opacity:.7}}>🤖 {relData.aiName}</span>}
+                {m.role==="bot" && (
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontWeight:700,fontSize:12,opacity:.7}}>🤖 {relData.aiName}</span>
+                    {!m.loading && (
+                      <button
+                        className={`speak-btn ${speakingMsgIdx===i?'speaking':''}`}
+                        onClick={(e)=>{ e.stopPropagation(); speakingMsgIdx===i ? stopSpeaking() : speakAiReply(m.text, i); }}
+                        title={speakingMsgIdx===i ? "Stop speaking" : "Listen to this response"}
+                      >
+                        {speakingMsgIdx===i ? "⏹" : "🔊"}
+                      </button>
+                    )}
+                  </div>
+                )}
                 {m.text}
               </div>
             ))}
